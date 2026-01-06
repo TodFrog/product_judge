@@ -1,0 +1,61 @@
+import asyncio
+from typing import Dict, Set, Callable, List
+
+from aiomqtt import Client
+from aiomqtt.types import PayloadType
+
+class __Router:
+    def __init__(self, device_id: str):
+        self.__device_id = device_id
+        self.__subscribed_topics: List[str] = []
+        self.__topic_handlers: Dict[str, Callable] = {}
+        self.__client: Client = None
+        self.__listen_task: asyncio.Task = None
+        self.__tasks: Set[asyncio.Task] = set()
+    
+    async def publish(self, topic: str, payload: PayloadType):
+        if self.__client is None:
+            raise Exception("Client not initialized")
+
+        topic = topic.replace("{DEVICE_ID}", self.__device_id)
+        await self.__client.publish(topic, payload)
+    
+    def subscribe(self, topic: str, handler: Callable):
+        self.__subscribed_topics.append(topic)
+        self.__topic_handlers[topic] = handler
+    
+    def shutdown(self):
+        self.__listen_task.cancel()
+    
+    async def run(self, client: Client):
+        self.__client = client
+
+        for topic in self.__subscribed_topics:
+            topic = topic.replace("{DEVICE_ID}", self.__device_id)
+            await self.__client.subscribe(topic)
+        
+        self.__listen_task = asyncio.create_task(self.__listen())
+
+        await self.__listen_task
+        
+        await asyncio.gather(*self.__tasks)
+    
+    async def __listen(self):
+        async def accept(message: aiomqtt.Message):
+            try:
+                await self.__topic_handlers[message.topic](message.payload)
+            except KeyError:
+                print(f"Unknown topic: {message.topic}")
+            except Exception as e:
+                print(f"Error handling message: {message.topic}")
+
+        try:
+            async for message in self.__client.messages:
+                task = asyncio.create_task(accept(message))
+                self.__tasks.add(task)
+                task.add_done_callback(self.__tasks.discard)
+        except asyncio.CancelledError:
+            print("Enqueue messages cancelled")
+    
+
+router = __Router()

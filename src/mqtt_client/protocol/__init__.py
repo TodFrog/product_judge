@@ -1,0 +1,2 @@
+class ConditionError(Exception):
+    pass
