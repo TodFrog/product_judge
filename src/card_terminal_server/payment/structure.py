@@ -7,9 +7,12 @@ from construct import (
     Checksum,
     Const,
     Int16ub,
+    PaddedString,
     Rebuild,
     Struct,
 )
+
+from .const import MessageType
 
 class BCD(Adapter):
     def _encode(self, obj, context, path):
@@ -38,12 +41,13 @@ def seek_and_read(stream, offset, length):
     stream.seek(org_pos)
     return data
 
+Length = BCD(Int16ub)
 
 Protocol = Struct(
     Const(b"\x02"),
-    "length" / Rebuild(BCD(Int16ub), lambda ctx: len(ctx.payload) + 9),
-    "service_code" / Bytes(2),
-    "message_type" / Bytes(2),
+    "length" / Rebuild(Length, lambda ctx: len(ctx.payload) + 9),
+    "service_code" / PaddedString(2, "ascii"),
+    "message_type" / MessageType,
     "payload" / Bytes(lambda ctx: ctx.length - 9),
     Const(b"\x03"),
     Checksum(

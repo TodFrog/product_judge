@@ -1,7 +1,12 @@
-from construct import Byte, Enum
+from construct import Byte, Bytes, Enum, Int16ub, Mapping
+
+MessageType = Mapping(Bytes(2), {
+    0: b"10", # Request
+    1: b"20", # Response
+})
 
 StatusCode = Enum(Byte,
-    S = 0x53, # 'S'
+    Y = 0x59, # 'Y'
     N = 0x4E, # 'N'
 )
 
